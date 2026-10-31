@@ -285,13 +285,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 				array_map(static fn(array $port): string => (string) ($port['out_discards_item_key'] ?? ''), $ports)
 			), static fn(string $key): bool => $key !== '')))
 		);
-		$speed_values = $this->loadLatestItemValues($hostid, array_values(array_unique(array_filter(array_map(
-			static fn(array $port): string => (string) ($port['speed_item_key'] ?? ''),
-			$ports
-		), static fn(string $key): bool => $key !== ''))));
-		$speed_values_alt = $this->loadLatestItemValues($hostid, array_values(array_unique(array_filter(array_map(
-			static fn(array $port): string => (string) ($port['speed_item_key_alt'] ?? ''),
-			$ports
+		// Batch primary and alternate speed item keys into a single API query.
+		$speed_values = $this->loadLatestItemValues($hostid, array_values(array_unique(array_filter(array_merge(
+			array_map(static fn(array $port): string => (string) ($port['speed_item_key'] ?? ''), $ports),
+			array_map(static fn(array $port): string => (string) ($port['speed_item_key_alt'] ?? ''), $ports)
 		), static fn(string $key): bool => $key !== ''))));
 		$state_bars = $this->loadTriggerStateBars($ports, $trigger_meta);
 
@@ -311,7 +308,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 				$speed_key_alt = (string) ($port['speed_item_key_alt'] ?? '');
 				if ($speed_key_alt !== '') {
 					$speed_key_used = $speed_key_alt;
-					$speed_raw = (float) ($speed_values_alt[$speed_key_alt] ?? 0.0);
+					$speed_raw = (float) ($speed_values[$speed_key_alt] ?? 0.0);
 				}
 			}
 			$speed_bps = $this->toSpeedBps($speed_raw, $speed_unit_mode);
