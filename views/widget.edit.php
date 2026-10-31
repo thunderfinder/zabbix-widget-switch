@@ -122,7 +122,11 @@ if ($widget_edit_js !== false) {
 		}
 	}
 
+	$csrf_token = class_exists('CCsrfTokenHelper')
+		? CCsrfTokenHelper::get('widget.switch.profiles.save')
+		: '';
 	$form->addJavaScript('window.SWITCH_WIDGET_BUILD = '.json_encode($manifest_version).';');
+	$form->addJavaScript('window.SWITCH_WIDGET_CSRF_TOKEN = '.json_encode($csrf_token).';');
 	$form->addJavaScript($widget_edit_js);
 }
 $form->addJavaScript('window.switch_widget_form.init();');

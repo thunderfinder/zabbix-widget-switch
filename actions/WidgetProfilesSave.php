@@ -7,14 +7,12 @@ use CControllerResponseData;
 
 class WidgetProfilesSave extends CController {
 	protected function init(): void {
-		// Keep endpoint usable for dashboard widget AJAX in all supported role setups.
-		$this->disableCsrfValidation();
 	}
 
 	protected function checkInput(): bool {
 			return $this->validateInput([
 				'preset_id' => 'required|int32',
-				'name' => 'required|string',
+				'name' => 'required|string|not_empty',
 				'row_count' => 'required|int32',
 				'ports_per_row' => 'required|int32',
 				'sfp_ports' => 'required|int32',
@@ -35,13 +33,13 @@ class WidgetProfilesSave extends CController {
 			return;
 		}
 
-		$name = trim((string) $this->getInput('name'));
+		$name = mb_substr(trim((string) $this->getInput('name')), 0, 15);
 		$row_count = max(1, min(24, (int) $this->getInput('row_count')));
 		$ports_per_row = max(1, min(48, (int) $this->getInput('ports_per_row')));
 		$sfp_ports = max(0, min(32, (int) $this->getInput('sfp_ports')));
 		$switch_size = max(40, min(100, (int) $this->getInput('switch_size')));
-		$switch_brand = trim((string) $this->getInput('switch_brand', 'NETSWITCH'));
-		$switch_model = trim((string) $this->getInput('switch_model', 'SW-24G'));
+		$switch_brand = mb_substr(trim((string) $this->getInput('switch_brand', 'NETSWITCH')), 0, 30);
+		$switch_model = mb_substr(trim((string) $this->getInput('switch_model', 'SW-24G')), 0, 30);
 
 		$file = __DIR__.'/../profiles.json';
 		$data = [];

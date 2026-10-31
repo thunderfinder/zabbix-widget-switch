@@ -1718,6 +1718,9 @@
 			if (csrfField && csrfField.name && csrfField.value) {
 				body.set(csrfField.name, csrfField.value);
 			}
+			if (window.SWITCH_WIDGET_CSRF_TOKEN) {
+				body.set('_csrf_token', String(window.SWITCH_WIDGET_CSRF_TOKEN));
+			}
 
 			const url = new URL(window.location.href);
 			url.search = '';
