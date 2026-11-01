@@ -117,7 +117,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$widget_name = $this->widget->getDefaultName();
 		}
 
-		if ($hostid !== '' && !$this->hasHostAccess($hostid)) {
+		// Consolidate access check with host metadata retrieval to eliminate redundant API::Host()->get call.
+		if ($hostid !== '' && $host_meta === []) {
 			$this->setResponse(new CControllerResponseData([
 				'name' => $widget_name,
 				'access_denied' => true,
@@ -441,20 +442,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 					'debug_mode' => $this->getDebugMode()
 				]
 			]));
-	}
-
-	private function hasHostAccess(string $hostid): bool {
-		if ($hostid === '') {
-			return true;
-		}
-
-		$rows = API::Host()->get([
-			'output' => ['hostid'],
-			'hostids' => [$hostid],
-			'limit' => 1
-		]);
-
-		return is_array($rows) && $rows !== [];
 	}
 
 	private function loadHostMeta(string $hostid): array {
