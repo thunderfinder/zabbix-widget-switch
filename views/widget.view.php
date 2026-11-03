@@ -180,33 +180,8 @@ $util_color_for = static function(?float $util) use ($util_low_threshold, $util_
 	}
 	return '#BBF7D0';
 };
-$live_select_js = 'var r=this.closest(".port24-switch");if(!r)return;'
-	.'var t=r.querySelector(".port24-summary-live-title"),is=r.querySelector("[data-live-spark=\"in\"]"),os=r.querySelector("[data-live-spark=\"out\"]"),iv=r.querySelector("[data-live-value=\"in\"]"),ov=r.querySelector("[data-live-value=\"out\"]"),uv=r.querySelector("[data-live-util=\"1\"]"),ev=r.querySelector("[data-live-errors=\"1\"]"),dv=r.querySelector("[data-live-discards=\"1\"]");'
-	.'var sg=r.querySelector("[data-live-state-grid=\"1\"]"),eg=r.querySelector("[data-live-errors-grid=\"1\"]"),dg=r.querySelector("[data-live-discards-grid=\"1\"]");'
-	.'if(!t||!is||!os||!iv||!ov||!uv||!ev||!dv||!sg||!eg||!dg)return;'
-	.'var mk=function(k,l,a,x,y){var s=\'<svg viewBox="0 0 120 26" class="port24-tip-svg"><line x1="3" y1="13" x2="117" y2="13" stroke="rgba(148,163,184,0.25)" stroke-width="1"></line>\';'
-	.'if(a){s+=\'<path d="\'+a+\'" class="\'+(k==="in"?"port24-tip-area-in":"port24-tip-area-out")+\'"></path>\';}'
-	.'if(l){s+=\'<path d="\'+l+\'" class="\'+(k==="in"?"port24-tip-path-in":"port24-tip-path-out")+\'"></path>\';s+=\'<circle cx="\'+(x||0)+\'" cy="\'+(y||0)+\'" r="2.8" class="port24-tip-dot"></circle>\';}'
-	.'return s+"</svg>";};'
-	.'var sh=function(v){var a=(v||"").split(","),h=\'<div class="port24-tip-state-grid">\';'
-	.'if(!v||a.length===0){for(var j=0;j<48;j++){h+=\'<span class="port24-tip-state-seg"></span>\';}return h+"</div>";}'
-	.'for(var i=0;i<a.length;i++){var c="port24-tip-state-seg";if(a[i]==="1"){c+=" problem";}else if(a[i]==="0"){c+=" ok";}h+=\'<span class="\'+c+\'"></span>\';}'
-	.'return h+"</div>";};'
-	.'var shc=function(v,k){var a=(v||"").split(","),m=0,h=\'<div class="port24-tip-state-grid">\';for(var i=0;i<a.length;i++){var n=parseFloat(a[i]);if(!isNaN(n)&&n>m){m=n;}}'
-	.'if(!v||a.length===0){for(var j=0;j<48;j++){h+=\'<span class="port24-tip-state-seg"></span>\';}return h+"</div>";}'
-	.'for(var z=0;z<a.length;z++){var d=parseFloat(a[z]);var c="port24-tip-state-seg";if(!isNaN(d)&&d>0&&m>0){var p=d/m;if(k==="e"){if(p>0.66){c+=" problem";}else if(p>0.2){c+=" ok";}}else{if(p>0.66){c+=" ok";}else if(p>0.2){c+=" problem";}}}h+=\'<span class="\'+c+\'"></span>\';}'
-	.'return h+"</div>";};'
-	.'t.textContent=this.getAttribute("data-port-name")||"Port";'
-	.'is.innerHTML=mk("in",this.dataset.liveInLine||"",this.dataset.liveInArea||"",this.dataset.liveInLastX||"0",this.dataset.liveInLastY||"0");'
-	.'os.innerHTML=mk("out",this.dataset.liveOutLine||"",this.dataset.liveOutArea||"",this.dataset.liveOutLastX||"0",this.dataset.liveOutLastY||"0");'
-	.'iv.textContent=this.dataset.liveInValue||"n/a";ov.textContent=this.dataset.liveOutValue||"n/a";'
-	.'uv.textContent=this.dataset.liveUtil||"0.0%";'
-	.'ev.textContent=this.dataset.liveErrors||"n/a";dv.textContent=this.dataset.liveDiscards||"n/a";'
-	.'sg.innerHTML=sh(this.dataset.liveState||"");'
-	.'eg.innerHTML=shc(this.dataset.liveErrorsBars||"","e");'
-	.'dg.innerHTML=shc(this.dataset.liveDiscardsBars||"","d");';
 
-$make_card = static function(array $port) use ($show_utilization_overlay, $util_color_for, $traffic_unit_mode, $live_select_js): CTag {
+$make_card = static function(array $port) use ($show_utilization_overlay, $util_color_for, $traffic_unit_mode): CTag {
 	$active_color = (string) ($port['active_color'] ?? '');
 	if (preg_match('/^#[0-9A-Fa-f]{6}$/', $active_color) !== 1) {
 		$active_color = '#22C55E';
@@ -422,10 +397,7 @@ $make_card = static function(array $port) use ($show_utilization_overlay, $util_
 	$card
 		->addClass('port24-card')
 		->setAttribute('style', '--port-color: '.$display_color.';')
-		->setAttribute('data-port-name', (string) $port['name'])
-		->setAttribute('onmouseenter', $live_select_js)
-		->setAttribute('onclick', $live_select_js)
-		->setAttribute('onfocus', $live_select_js);
+		->setAttribute('data-port-name', (string) $port['name']);
 	if ($show_utilization_overlay) {
 		$card
 			->addClass('port24-heatmap')
@@ -847,14 +819,18 @@ $live_script = <<<JS
 		};
 		const renderStateGrid = function(csv) {
 			const values = (csv || '').split(',');
-			let html = '<div class="port24-tip-state-grid">';
+			const grid = document.createElement('div');
+			grid.className = 'port24-tip-state-grid';
 			if (!csv || values.length === 0) {
 				for (let i = 0; i < 48; i++) {
-					html += '<span class="port24-tip-state-seg"></span>';
+					const seg = document.createElement('span');
+					seg.className = 'port24-tip-state-seg';
+					grid.appendChild(seg);
 				}
-				return html + '</div>';
+				return grid;
 			}
 			for (let i = 0; i < values.length; i++) {
+				const seg = document.createElement('span');
 				let cls = 'port24-tip-state-seg';
 				if (values[i] === '1') {
 					cls += ' problem';
@@ -862,9 +838,10 @@ $live_script = <<<JS
 				else if (values[i] === '0') {
 					cls += ' ok';
 				}
-				html += '<span class="' + cls + '"></span>';
+				seg.className = cls;
+				grid.appendChild(seg);
 			}
-			return html + '</div>';
+			return grid;
 		};
 		const renderCounterGrid = function(csv, kind) {
 			const values = (csv || '').split(',');
@@ -875,15 +852,19 @@ $live_script = <<<JS
 					max = n;
 				}
 			}
-			let html = '<div class="port24-tip-state-grid">';
+			const grid = document.createElement('div');
+			grid.className = 'port24-tip-state-grid';
 			if (!csv || values.length === 0) {
 				for (let i = 0; i < 48; i++) {
-					html += '<span class="port24-tip-state-seg"></span>';
+					const seg = document.createElement('span');
+					seg.className = 'port24-tip-state-seg';
+					grid.appendChild(seg);
 				}
-				return html + '</div>';
+				return grid;
 			}
 			for (let i = 0; i < values.length; i++) {
 				const n = parseFloat(values[i]);
+				const seg = document.createElement('span');
 				let cls = 'port24-tip-state-seg';
 				if (!Number.isNaN(n) && n > 0 && max > 0) {
 					const pct = n / max;
@@ -904,9 +885,10 @@ $live_script = <<<JS
 						}
 					}
 				}
-				html += '<span class="' + cls + '"></span>';
+				seg.className = cls;
+				grid.appendChild(seg);
 			}
-			return html + '</div>';
+			return grid;
 		};
 
 		const reset = function() {
@@ -957,10 +939,10 @@ $live_script = <<<JS
 			utilValue.textContent = card.dataset.liveUtil || 'n/a';
 			errorsValue.textContent = card.dataset.liveErrors || 'n/a';
 			discardsValue.textContent = card.dataset.liveDiscards || 'n/a';
-				stateGrid.innerHTML = renderStateGrid(card.dataset.liveState || '');
-				errorsGrid.innerHTML = renderCounterGrid(card.dataset.liveErrorsBars || '', 'errors');
-				discardsGrid.innerHTML = renderCounterGrid(card.dataset.liveDiscardsBars || '', 'discards');
-			};
+			stateGrid.replaceChildren(renderStateGrid(card.dataset.liveState || ''));
+			errorsGrid.replaceChildren(renderCounterGrid(card.dataset.liveErrorsBars || '', 'errors'));
+			discardsGrid.replaceChildren(renderCounterGrid(card.dataset.liveDiscardsBars || '', 'discards'));
+		};
 
 		const handleWrapEnter = function(event) {
 			const wrap = event.currentTarget;
