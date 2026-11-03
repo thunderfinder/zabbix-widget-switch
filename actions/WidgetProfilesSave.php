@@ -84,8 +84,9 @@ class WidgetProfilesSave extends CController {
 			return;
 		}
 
-		// Ensure file retains group-writable permissions (0664) required for shared web server setups.
-		@chmod($tmp_file, 0664);
+		// Preserve existing file permissions or fallback to 0664 for shared web server setups.
+		$existing_perms = file_exists($file) ? (fileperms($file) & 0777) : 0664;
+		@chmod($tmp_file, $existing_perms);
 
 		if (!@rename($tmp_file, $file)) {
 			if (file_exists($tmp_file)) {
