@@ -975,35 +975,50 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'filter' => ['key_' => $keys]
 		]);
 
+		$items_by_type = [];
 		$result = [];
 		foreach ($rows as $row) {
 			$key = (string) $row['key_'];
 			$value_type = (int) $row['value_type'];
-			if (!in_array($value_type, [0, 3], true)) {
-				continue;
+			if (in_array($value_type, [0, 3], true)) {
+				$items_by_type[$value_type][(string) $row['itemid']] = $key;
+				$result[$key] = [];
 			}
+		}
 
+		// Batch history retrieval by value_type to eliminate N+1 API calls.
+		// Avoid global limit in history.get which truncates across items; slice per item instead.
+		$time_from = time() - self::TRAFFIC_LOOKBACK_SECONDS;
+		foreach ($items_by_type as $value_type => $items) {
 			$history = API::History()->get([
-				'output' => ['clock', 'value'],
-				'itemids' => [(string) $row['itemid']],
+				'output' => ['itemid', 'clock', 'value'],
+				'itemids' => array_keys($items),
 				'history' => $value_type,
-				'time_from' => time() - self::TRAFFIC_LOOKBACK_SECONDS,
+				'time_from' => $time_from,
 				'sortfield' => 'clock',
-				'sortorder' => 'DESC',
-				'limit' => self::TRAFFIC_POINTS
+				'sortorder' => 'DESC'
 			]);
 
-			if (!is_array($history) || $history === []) {
-				$result[$key] = [];
+			if (!is_array($history)) {
 				continue;
 			}
 
-			$history = array_reverse($history);
-			$series = [];
 			foreach ($history as $point) {
-				$series[] = (float) $point['value'];
+				$itemid = (string) ($point['itemid'] ?? '');
+				if (!isset($items[$itemid])) {
+					continue;
+				}
+				$key = $items[$itemid];
+				if (count($result[$key]) < self::TRAFFIC_POINTS) {
+					$result[$key][] = (float) $point['value'];
+				}
 			}
-			$result[$key] = $series;
+
+			foreach ($items as $itemid => $key) {
+				if ($result[$key] !== []) {
+					$result[$key] = array_reverse($result[$key]);
+				}
+			}
 		}
 
 		return $result;
