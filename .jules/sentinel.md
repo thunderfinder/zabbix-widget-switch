@@ -1,3 +1,11 @@
+## 2026-11-03 - Preserving Permissions During Atomic Configuration File Replacement
+
+**Vulnerability:** When replacing shared module configuration files like `profiles.json` atomically via temporary files and `rename()`, the newly created file inherits the umask permissions of the temporary file (typically `0600` or `0644`), stripping the required group-write permission (`0664`) specified in repository guidelines. This can lock out shared web server processes (e.g., Apache/PHP-FPM) from subsequent configuration saves or corrupt shared operational state.
+
+**Learning:** In Unix environments, `rename()` replaces the directory inode entry without adopting the target file's previous file mode or group ownership. If `file_put_contents()` creates the temporary file under a restrictive umask, the renamed target retains those restrictive permissions.
+
+**Prevention:** When performing atomic write-and-rename operations on shared configuration files, explicitly apply the target file permission mode (`@chmod($tmp_file, 0664)`) to the temporary file before invoking `rename()`.
+
 ## 2026-10-30 - CSRF Protection in Module Action Controllers
 
 **Vulnerability:** The profile saving controller (`actions/WidgetProfilesSave.php`) explicitly disabled CSRF protection via `$this->disableCsrfValidation();` on a state-changing POST endpoint that writes directly to disk (`profiles.json`). This exposed authenticated users to Cross-Site Request Forgery (CSRF), allowing malicious external sites to modify or corrupt shared switch profile configurations.

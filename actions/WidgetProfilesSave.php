@@ -79,7 +79,16 @@ class WidgetProfilesSave extends CController {
 
 		// Atomic write: write to unique temporary file with lock, then rename to target file.
 		$tmp_file = $file.'.tmp.'.bin2hex(random_bytes(6));
-		if (@file_put_contents($tmp_file, $json, LOCK_EX) === false || !@rename($tmp_file, $file)) {
+		if (@file_put_contents($tmp_file, $json, LOCK_EX) === false) {
+			$this->respond(false, 'Cannot write profiles.json on server (check file permissions).');
+			return;
+		}
+
+		// Preserve existing file permissions or fallback to 0664 for shared web server setups.
+		$existing_perms = file_exists($file) ? (fileperms($file) & 0777) : 0664;
+		@chmod($tmp_file, $existing_perms);
+
+		if (!@rename($tmp_file, $file)) {
 			if (file_exists($tmp_file)) {
 				@unlink($tmp_file);
 			}
