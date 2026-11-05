@@ -1244,36 +1244,57 @@ class WidgetView extends CControllerDashboardWidgetView {
 		]);
 
 		$result = [];
-		$time_from = time() - self::COUNTER_LOOKBACK_SECONDS;
-
+		$items_by_type = [];
+		$item_id_to_key = [];
 		foreach ($rows as $row) {
 			$key = (string) ($row['key_'] ?? '');
 			$value_type = (int) ($row['value_type'] ?? -1);
 			if ($key === '' || !in_array($value_type, [0, 3], true)) {
 				continue;
 			}
+			$itemid = (string) $row['itemid'];
+			$items_by_type[$value_type][$itemid] = $key;
+			$item_id_to_key[$itemid] = $key;
+			$result[$key] = [
+				'delta' => 0.0,
+				'trend' => 'n/a',
+				'buckets' => array_fill(0, self::STATE_BAR_BUCKETS, 0.0)
+			];
+		}
 
+		// Batch history retrieval by value_type to eliminate N+1 API calls.
+		$time_from = time() - self::COUNTER_LOOKBACK_SECONDS;
+		$history_by_item = [];
+		foreach ($items_by_type as $value_type => $items) {
 			$history = API::History()->get([
-				'output' => ['clock', 'value'],
-				'itemids' => [(string) $row['itemid']],
+				'output' => ['itemid', 'clock', 'value'],
+				'itemids' => array_keys($items),
 				'history' => $value_type,
 				'time_from' => $time_from,
 				'sortfield' => 'clock',
-				'sortorder' => 'ASC',
-				'limit' => self::COUNTER_POINTS
+				'sortorder' => 'ASC'
 			]);
 
-			if (!is_array($history) || $history === []) {
-				$result[$key] = [
-					'delta' => 0.0,
-					'trend' => 'n/a',
-					'buckets' => array_fill(0, self::STATE_BAR_BUCKETS, 0.0)
-				];
+			if (!is_array($history)) {
+				continue;
+			}
+
+			foreach ($history as $point) {
+				$itemid = (string) ($point['itemid'] ?? '');
+				if (isset($items[$itemid])) {
+					$history_by_item[$itemid][] = $point;
+				}
+			}
+		}
+
+		$bucket_span = self::COUNTER_LOOKBACK_SECONDS / self::STATE_BAR_BUCKETS;
+		foreach ($item_id_to_key as $itemid => $key) {
+			$history = $history_by_item[$itemid] ?? [];
+			if ($history === []) {
 				continue;
 			}
 
 			$buckets = array_fill(0, self::STATE_BAR_BUCKETS, 0.0);
-			$bucket_span = self::COUNTER_LOOKBACK_SECONDS / self::STATE_BAR_BUCKETS;
 			for ($i = 1, $n = count($history); $i < $n; $i++) {
 				$prev_value = (float) ($history[$i - 1]['value'] ?? 0);
 				$curr_value = (float) ($history[$i]['value'] ?? 0);
