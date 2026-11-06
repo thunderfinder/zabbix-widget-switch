@@ -1243,6 +1243,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'filter' => ['key_' => $keys]
 		]);
 
+		$items_by_type = [];
+		$history_by_key = [];
 		$result = [];
 		$time_from = time() - self::COUNTER_LOOKBACK_SECONDS;
 
@@ -1252,18 +1254,41 @@ class WidgetView extends CControllerDashboardWidgetView {
 			if ($key === '' || !in_array($value_type, [0, 3], true)) {
 				continue;
 			}
+			$items_by_type[$value_type][(string) $row['itemid']] = $key;
+			$history_by_key[$key] = [];
+		}
 
+		// Batch history retrieval by value_type to eliminate N+1 queries.
+		// Avoid global limit in history.get which truncates across items; slice per item instead.
+		foreach ($items_by_type as $value_type => $items) {
 			$history = API::History()->get([
-				'output' => ['clock', 'value'],
-				'itemids' => [(string) $row['itemid']],
+				'output' => ['itemid', 'clock', 'value'],
+				'itemids' => array_keys($items),
 				'history' => $value_type,
 				'time_from' => $time_from,
 				'sortfield' => 'clock',
-				'sortorder' => 'ASC',
-				'limit' => self::COUNTER_POINTS
+				'sortorder' => 'ASC'
 			]);
 
-			if (!is_array($history) || $history === []) {
+			if (!is_array($history)) {
+				continue;
+			}
+
+			foreach ($history as $point) {
+				$itemid = (string) ($point['itemid'] ?? '');
+				if (!isset($items[$itemid])) {
+					continue;
+				}
+				$key = $items[$itemid];
+				if (count($history_by_key[$key]) < self::COUNTER_POINTS) {
+					$history_by_key[$key][] = $point;
+				}
+			}
+		}
+
+		$bucket_span = self::COUNTER_LOOKBACK_SECONDS / self::STATE_BAR_BUCKETS;
+		foreach ($history_by_key as $key => $history) {
+			if ($history === []) {
 				$result[$key] = [
 					'delta' => 0.0,
 					'trend' => 'n/a',
@@ -1273,7 +1298,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 
 			$buckets = array_fill(0, self::STATE_BAR_BUCKETS, 0.0);
-			$bucket_span = self::COUNTER_LOOKBACK_SECONDS / self::STATE_BAR_BUCKETS;
 			for ($i = 1, $n = count($history); $i < $n; $i++) {
 				$prev_value = (float) ($history[$i - 1]['value'] ?? 0);
 				$curr_value = (float) ($history[$i]['value'] ?? 0);
