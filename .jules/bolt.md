@@ -1,3 +1,9 @@
+## 2026-11-06 - Batch 24-Hour Counter Deltas History Retrieval by Value Type
+
+**Learning:** `loadCounterDeltas24h()` previously performed sequential `API::History()->get` requests per counter item (in/out errors and in/out discards), resulting in up to 192 API requests for 48-port switches and 384 requests for 96-port switches. By batching item IDs by numeric `value_type` (0 and 3) in a single time-bounded request without a global query `limit`, and grouping points by item in PHP memory up to `self::COUNTER_POINTS` (240 points), history API requests drop by 95.8% to 99.5% (down to at most 2 requests) while maintaining identical delta and bucket calculations.
+
+**Action:** Consolidate multi-item history requests by `value_type` across all interface telemetry collectors that process time-bounded windows, enforcing per-item point caps in application memory.
+
 ## 2026-11-03 - Batch History Retrieval by Value Type in Narrow Time Windows
 
 **Learning:** When retrieving traffic history over a bounded time window (such as 30 minutes), issuing individual per-item queries via `API::History()->get` creates an N+1 API round-trip bottleneck (e.g., 96 to 192 sequential API calls for 48-port and 96-port layouts). While querying multiple items with a global `limit` truncates points across interfaces, querying narrow time windows without a query `limit` allows batching by `value_type` (types 0 and 3). The widget can then collect and slice the desired data points (e.g., 24 points) per item in PHP memory, achieving over 90-99% reduction in API calls without data corruption or heavy memory overhead.
