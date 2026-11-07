@@ -1063,6 +1063,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 		$sort_up = defined('ZBX_SORT_UP') ? ZBX_SORT_UP : 'ASC';
 
+		$exact_metric_map = [];
+		$exact_keys = [];
+		$wildcard_patterns = [];
+
 		foreach ($patterns as $metric => $pattern_raw) {
 			$pattern = trim((string) $pattern_raw);
 			if ($pattern === '' || !array_key_exists($metric, $result)) {
@@ -1070,34 +1074,63 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 			$pattern = $this->normalizeDotIndexPattern($pattern);
 
+			if (strpos($pattern, '*') !== false) {
+				$wildcard_patterns[$metric] = $pattern;
+			}
+			else {
+				$exact_metric_map[$pattern][] = $metric;
+				$exact_keys[] = $pattern;
+			}
+		}
+
+		// Batch non-wildcard summary items into a single API query.
+		if ($exact_keys !== []) {
 			try {
-				if (strpos($pattern, '*') !== false) {
-					try {
-						$rows = API::Item()->get([
-							'output' => ['key_', 'lastvalue'],
-							'hostids' => [$hostid],
-							'search' => ['key_' => $pattern],
-							'searchWildcardsEnabled' => true,
-							'sortfield' => 'key_',
-							'sortorder' => $sort_up
-						]);
-					}
-					catch (\Throwable $e) {
-						$rows = API::Item()->get([
-							'output' => ['key_', 'lastvalue'],
-							'hostids' => [$hostid],
-							'search' => ['key_' => $pattern],
-							'sortfield' => 'key_',
-							'sortorder' => $sort_up
-						]);
+				$rows = API::Item()->get([
+					'output' => ['key_', 'lastvalue'],
+					'hostids' => [$hostid],
+					'filter' => ['key_' => array_values(array_unique($exact_keys))]
+				]);
+
+				if (is_array($rows)) {
+					foreach ($rows as $row) {
+						$key = trim((string) ($row['key_'] ?? ''));
+						if ($key === '' || !isset($exact_metric_map[$key])) {
+							continue;
+						}
+						$entry = [
+							'key' => $key,
+							'value' => trim((string) ($row['lastvalue'] ?? ''))
+						];
+						foreach ($exact_metric_map[$key] as $metric) {
+							$result[$metric][] = $entry;
+						}
 					}
 				}
-				else {
+			}
+			catch (\Throwable $e) {
+			}
+		}
+
+		foreach ($wildcard_patterns as $metric => $pattern) {
+			try {
+				try {
 					$rows = API::Item()->get([
 						'output' => ['key_', 'lastvalue'],
 						'hostids' => [$hostid],
-						'filter' => ['key_' => [$pattern]],
-						'limit' => 1
+						'search' => ['key_' => $pattern],
+						'searchWildcardsEnabled' => true,
+						'sortfield' => 'key_',
+						'sortorder' => $sort_up
+					]);
+				}
+				catch (\Throwable $e) {
+					$rows = API::Item()->get([
+						'output' => ['key_', 'lastvalue'],
+						'hostids' => [$hostid],
+						'search' => ['key_' => $pattern],
+						'sortfield' => 'key_',
+						'sortorder' => $sort_up
 					]);
 				}
 			}
