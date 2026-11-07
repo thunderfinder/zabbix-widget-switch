@@ -1,3 +1,9 @@
+## 2026-11-07 - Consolidate Summary Items API Retrieval
+
+**Learning:** `loadSummaryItems()` in `actions/WidgetView.php` previously issued individual `API::Item()->get` queries sequentially for each configured summary item pattern (software, vlans, cpu, fan, uptime, serial). In standard switch configurations, 5 of the 6 summary items are exact scalar OIDs / keys (e.g., `sysDescr.0`, `dot1qNumVlans.0`, `system.hw.fans[status]`, `sysUpTime.0`, `entPhysicalSerialNum.1`), generating up to 6 separate API calls per widget render. By separating exact keys from wildcard patterns and querying all exact keys in a single batch `API::Item()->get` call with `'filter' => ['key_' => $exact_keys]`, summary item API calls drop from 6 down to 2 (a 66.7% reduction in round trips) while preserving identical metric values and wildcard behavior.
+
+**Action:** Whenever collecting multiple latest item values across discrete metrics in dashboard widgets, partition exact keys from wildcard search patterns and batch all exact keys in a single filter request.
+
 ## 2026-11-06 - Batch 24-Hour Counter Deltas History Retrieval by Value Type
 
 **Learning:** `loadCounterDeltas24h()` previously performed sequential `API::History()->get` requests per counter item (in/out errors and in/out discards), resulting in up to 192 API requests for 48-port switches and 384 requests for 96-port switches. By batching item IDs by numeric `value_type` (0 and 3) in a single time-bounded request without a global query `limit`, and grouping points by item in PHP memory up to `self::COUNTER_POINTS` (240 points), history API requests drop by 95.8% to 99.5% (down to at most 2 requests) while maintaining identical delta and bucket calculations.
