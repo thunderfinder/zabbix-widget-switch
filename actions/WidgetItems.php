@@ -71,45 +71,44 @@ class WidgetItems extends CController {
 			$pattern_counts[$pattern]++;
 		}
 
-		$items = [];
 		$query_l = mb_strtolower($query);
 		$search_l = mb_strtolower($search_term);
+
+		// Prioritize wildcard patterns and sort them separately to avoid sorting thousands of exact items.
+		$patterns = [];
 		foreach ($pattern_counts as $pattern => $count) {
 			if (!$this->matchesPrefix($query_l, $search_l, $pattern)) {
 				continue;
 			}
 
-			$items[] = [
+			$patterns[] = [
 				'value' => $pattern,
 				'label' => $count > 1 ? sprintf('%s (%d)', $pattern, $count) : $pattern,
 				'type' => 'pattern'
 			];
 		}
+		usort($patterns, static fn(array $a, array $b): int => strcmp((string) ($a['value'] ?? ''), (string) ($b['value'] ?? '')));
 
-		foreach (array_keys($exact_keys) as $key) {
-			if (!$this->matchesPrefix($query_l, $search_l, $key)) {
-				continue;
+		$items = array_slice($patterns, 0, self::MAX_SUGGESTIONS);
+		$remaining = self::MAX_SUGGESTIONS - count($items);
+
+		if ($remaining > 0) {
+			$exact_items = [];
+			foreach (array_keys($exact_keys) as $key) {
+				if (!$this->matchesPrefix($query_l, $search_l, $key)) {
+					continue;
+				}
+
+				$exact_items[] = [
+					'value' => $key,
+					'label' => $key,
+					'type' => 'item'
+				];
 			}
-
-			$items[] = [
-				'value' => $key,
-				'label' => $key,
-				'type' => 'item'
-			];
+			usort($exact_items, static fn(array $a, array $b): int => strcmp((string) ($a['value'] ?? ''), (string) ($b['value'] ?? '')));
+			$items = array_merge($items, array_slice($exact_items, 0, $remaining));
 		}
 
-		usort($items, static function(array $a, array $b): int {
-			// Keep wildcard entries visible (e.g. ifOutOctets[*]) even with large item lists.
-			$a_pattern = ((string) ($a['type'] ?? '') === 'pattern') ? 1 : 0;
-			$b_pattern = ((string) ($b['type'] ?? '') === 'pattern') ? 1 : 0;
-			if ($a_pattern !== $b_pattern) {
-				return $b_pattern <=> $a_pattern;
-			}
-
-			return strcmp((string) ($a['value'] ?? ''), (string) ($b['value'] ?? ''));
-		});
-
-		$items = array_slice($items, 0, self::MAX_SUGGESTIONS);
 		$this->respond($items);
 	}
 
